@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://octaedlp00.github.io/engineweb/
+    about: Read the guides and per-package API reference first.
+  - name: Contributing guidelines
+    url: https://github.com/OctaEDLP00/engineweb/blob/main/CONTRIBUTING.md
+    about: Changesets, Conventional Commits and the verification chain.

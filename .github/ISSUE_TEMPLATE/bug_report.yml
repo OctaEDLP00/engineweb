@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible problem in a package, the docs or the game example.
+title: 'fix: '
+labels: [bug]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Where does the bug live?
+      options:
+        - '@engineweb/worker-terrain'
+        - '@engineweb/typed-spatial-hash'
+        - '@engineweb/async-pathfinder'
+        - '@engineweb/net-interpolator'
+        - '@engineweb/signal-ecs'
+        - '@engineweb/wasm-physics-binding'
+        - '@engineweb/effect-asset-pipeline'
+        - '@engineweb/skeletal-gpu'
+        - '@engineweb/audio-synthesis'
+        - docs
+        - game-example
+        - tooling / CI
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Package version (or commit SHA if unreleased).
+      placeholder: e.g. 0.0.1
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal steps or code snippet to reproduce the issue.
+      placeholder: |
+        ```ts
+        // minimal snippet here
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Node.js, pnpm, OS and browser (if relevant) versions.
+      placeholder: |
+        Node: v22.x
+        pnpm: 12.x
+        OS: ...
+        Browser: ...
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, links or anything else that helps.

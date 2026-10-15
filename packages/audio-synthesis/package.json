@@ -1,0 +1,35 @@
+{
+  "name": "@engineweb/audio-synthesis",
+  "version": "0.0.1",
+  "description": "Procedural sound design and adaptive music using WebAudio & AudioWorklet (FM synthesis, noise, ADSR)",
+  "keywords": ["audio", "synthesis", "webaudio", "audioworklet", "procedural", "fm", "adsr"],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./processor": {
+      "types": "./dist/processor.d.ts",
+      "import": "./dist/processor.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "README.md", "CHANGELOG.md", "LICENSE"],
+  "scripts": {
+    "build": "tsdown index.ts --format esm --dts --clean --no-fixed-extension && tsdown src/processor.ts --format esm --dts --out-dir dist --no-clean --no-fixed-extension",
+    "test": "vitest run --passWithNoTests",
+    "coverage": "vitest run --coverage --passWithNoTests"
+  },
+  "license": "MIT",
+  "repository": {
+    "directory": "packages/audio-synthesis",
+    "type": "git",
+    "url": "https://github.com/OctaEDLP00/engineweb.git"
+  },
+  "bugs": "https://github.com/OctaEDLP00/engineweb/issues",
+  "homepage": "https://github.com/OctaEDLP00/engineweb#readme"
+}

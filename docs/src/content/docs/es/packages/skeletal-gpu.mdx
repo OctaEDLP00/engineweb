@@ -1,0 +1,119 @@
+---
+title: '@engineweb/skeletal-gpu'
+description: Animación esquelética acelerada por GPU vía WebGPU/WebGL2.
+---
+
+import { Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../../components/Installation.astro'
+
+Animación esquelética orientada a GPU: esqueletos y tablas de animación empaquetados en CPU en buffers planos listos para subir como texturas o Storage Buffers, mientras el muestreo, los blend trees y la composición de jerarquía corren en matemática sin alojamiento sobre `Float32Array`s.
+
+Cientos de personajes con skinning animan sin picar el hilo principal — el renderizador solo sube las matrices resultantes.
+
+<Badge text="WebGPU / WebGL2" variant="tip" />
+<Badge text="blend trees" variant="success" />
+<Badge text="update sin alojar" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/skeletal-gpu"
+  variant="minimal"
+  icon="github"
+>
+  Ver código del paquete
+</LinkButton>
+
+## Características
+
+<CardGrid stagger>
+  <Card title="Esqueletos validados" icon="approve-check">
+    Orden padre-antes-que-hijo obligatorio, así la composición no necesita orden topológico.
+  </Card>
+  <Card title="Keyframes empaquetados" icon="list-format">
+    `7` floats por hueso por frame — cuaternión más traslación, frames contiguos.
+  </Card>
+  <Card title="Blending por instancia" icon="random">
+    Cualquier número de tracks con peso en `[0, 1]`, muestreo slerp y mezcla con hemisferio seguro.
+  </Card>
+  <Card title="Pool de instancias" icon="rocket">
+    Pool fijo de `maxInstances` con reciclado vía `createInstance` / `destroyInstance`.
+  </Card>
+</CardGrid>
+
+## Instalación
+
+<Installation package="skeletal-gpu" />
+
+## Uso
+
+<Steps>
+
+1. Registra un esqueleto — huesos ordenados para que cada padre sea `-1` o un hueso anterior:
+
+   ```typescript
+   import { SkeletalGpu } from '@engineweb/skeletal-gpu'
+
+   const anim = new SkeletalGpu({ backend: 'webgpu', maxInstances: 256 })
+
+   const skeleton = anim.registerSkeleton(
+     [
+       { name: 'hips', parent: -1 },
+       { name: 'spine', parent: 0 },
+       { name: 'head', parent: 1 },
+     ],
+     [
+       { name: 'idle', durationSeconds: 2, keyframes: idleFrames }, // frames * bones * 7
+       { name: 'run', durationSeconds: 1, keyframes: runFrames },
+     ],
+   )
+   ```
+
+2. Aloja una instancia y ajusta el blend tree:
+
+   ```typescript
+   const orc = anim.createInstance(skeleton)
+   anim.setBlend(orc, 'idle', 0.7)
+   anim.setBlend(orc, 'run', 0.3)
+   ```
+
+3. Avanza el tiempo y sube las matrices de mundo vivas cada frame:
+
+   ```typescript
+   function frame(dt: number): void {
+     anim.update(dt)
+     const matrices = anim.getInstanceMatrices(orc) // bones * 16 column-major floats
+     device.queue.writeBuffer(instanceBuffer, 0, matrices) // → storage buffer / bone texture
+   }
+   ```
+
+</Steps>
+
+Disposición de keyframes por frame y por hueso (en orden de huesos):
+
+```
+[qx, qy, qz, qw, tx, ty, tz]  // 7 floats, frames laid back-to-back
+```
+
+## Referencia de la API
+
+### `new SkeletalGpu(options)`
+
+| Opción         | Descripción                                                      |
+| -------------- | ---------------------------------------------------------------- |
+| `backend`      | `'webgpu'` \| `'webgl2'`. Cualquier otro valor lanza `TypeError`. |
+| `maxInstances` | Tamaño del pool de instancias. Entero positivo.                  |
+
+### Métodos
+
+| Método                                | Descripción                                                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `registerSkeleton(bones, tracks)`     | Valida y copia en profundidad; devuelve el id. Los keyframes deben traer frames completos de `huesos × 7`.               |
+| `createInstance(skeletonId)`          | Aloja un slot con matrices identidad. Lanza error si se agota.                                                           |
+| `destroyInstance(instanceId)`         | Libera el slot para reutilizarlo.                                                                                        |
+| `setBlend(instanceId, track, weight)` | Peso del blend tree en `[0, 1]`; `0` elimina la entrada. Tracks desconocidos lanzan error.                               |
+| `update(deltaSeconds)`                | Avanza cada instancia activa; los pesos se normalizan (total cero usa el primer track). `0` no hace nada.               |
+| `getInstanceMatrices(instanceId)`     | Buffer vivo `huesos × 16` columna-mayor. Súbelo, no lo retengas ni lo mutes.                                             |
+
+## Notas de rendimiento
+
+- La matemática por frame usa scratch buffers a nivel de módulo — la composición de matrices no aloja nada.
+- El orden de huesos se exige al registrar justo para que `update()` no necesite orden topológico.

@@ -1,0 +1,130 @@
+---
+title: '@engineweb/typed-spatial-hash'
+description: Zero-GC spatial partitioning using TypedArrays.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkButton, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components'
+import Installation from '../../../components/Installation.astro'
+
+High-performance spatial partitioning (uniform spatial hash) built exclusively on **TypedArrays** — no heap objects on the hot path, no Garbage Collection pauses, even with 5,000+ simultaneous entities.
+
+Ideal for broad-phase collision detection, radius searches and k-nearest-neighbor queries in tight game loops.
+
+<Badge text="zero allocation at runtime" variant="success" />
+<Badge text="TypedArrays only" variant="note" />
+<Badge text="5,000+ entities" variant="tip" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/typed-spatial-hash"
+  variant="minimal"
+  icon="github"
+>
+  Browse package source
+</LinkButton>
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Flat SoA storage" icon="list-format">
+    `Float32Array` positions, `Uint8Array` liveness flags, power-of-two bucket table with intrusive linked lists.
+  </Card>
+  <Card title="Radius queries" icon="star">
+    Overlapped cells are walked with a stamp array, so hash collisions never double-test an entity.
+  </Card>
+  <Card title="k-NN queries" icon="random">
+    In-place quickselect plus insertion sort over scratch buffers — sorted nearest-first results.
+  </Card>
+  <Card title="O(1) updates" icon="rocket">
+    Moving entities unlink and re-link in chain length; `insert`, `remove` and `clear` allocate nothing.
+  </Card>
+</CardGrid>
+
+## Installation
+
+<Installation package="typed-spatial-hash" />
+
+## Usage
+
+<Tabs>
+  <TabItem label="Broad-phase collision">
+
+```typescript
+import { TypedSpatialHash } from '@engineweb/typed-spatial-hash'
+
+const grid = new TypedSpatialHash({ cellSize: 16, capacity: 5000 })
+
+// Insert or move entities (ids are 0 .. capacity - 1)
+grid.insert(playerId, playerX, playerY)
+grid.insert(npcId, npcX, npcY)
+
+// Who is within 48 units of the player?
+const nearby = grid.queryRadius(playerX, playerY, 48)
+for (let i = 0; i < nearby.count; i++) {
+  collide(playerId, nearby.ids[i])
+}
+
+grid.remove(deadId)
+```
+
+  </TabItem>
+  <TabItem label="AI targeting (k-NN)">
+
+```typescript
+// 4 nearest neighbors, sorted ascending by distance
+const nearest = grid.queryKNearest(npcX, npcY, 4)
+for (let i = 0; i < nearest.count; i++) {
+  target(npcId, nearest.ids[i])
+}
+```
+
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="Reused buffers">
+  Both queries return the same internal `{ ids, count }` object backed by a preallocated
+  `Uint32Array`. Copy the ids out if you need to keep them past the next query:
+
+```typescript
+const snapshot = nearby.ids.slice(0, nearby.count)
+```
+
+</Aside>
+
+## API reference
+
+### `new TypedSpatialHash(options)`
+
+| Option     | Description                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------------- |
+| `cellSize` | Uniform cell edge in world units. Must be positive. Pick roughly the diameter of a typical entity. |
+| `capacity` | Maximum entity count. Must be a positive integer. Ids must satisfy `0 <= id < capacity`.           |
+
+### Methods
+
+| Method                   | Description                                                                                           |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `insert(id, x, y)`       | Inserts or updates an entity position. Allocates nothing. Throws `RangeError` on bad ids/coordinates. |
+| `remove(id)`             | Removes an entity; no-op when absent. Allocates nothing.                                              |
+| `clear()`                | Removes every entity. Allocates nothing.                                                              |
+| `has(id)`                | Whether the id is currently stored.                                                                   |
+| `get size()`             | Number of stored entities.                                                                            |
+| `queryRadius(x, y, radius)` | All entities with `dist² <= radius²`, unsorted. Throws on negative radius.                       |
+| `queryKNearest(x, y, k)` | Up to `k` nearest entities, sorted ascending by distance. Throws on non-positive `k`.                 |
+
+```typescript
+interface SpatialHashOptions {
+  cellSize: number
+  capacity: number
+}
+// ids is reused — copy if you keep it
+interface QueryResult {
+  ids: Uint32Array
+  count: number
+}
+```
+
+## Performance notes
+
+- All per-frame work is flat-array arithmetic; the result object shape is created once in the constructor.
+- Buckets stay short when `cellSize` matches entity density.
+- For mostly-static scenes, insert once and query freely — queries never mutate the index.

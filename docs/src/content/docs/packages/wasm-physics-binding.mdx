@@ -1,0 +1,115 @@
+---
+title: '@engineweb/wasm-physics-binding'
+description: Zero-copy WebAssembly physics interop layer.
+---
+
+import { Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../components/Installation.astro'
+
+Zero-copy interop for compiled WebAssembly physics engines (Rapier, Box2D, …): one canonical `WebAssembly.Memory` holds every body matrix, shared directly with the WASM module and readable from WebGL/Three.js without serialization.
+
+When no compatible module is reachable, a built-in JS integrator keeps the same memory contract, so games boot and stay testable anywhere.
+
+<Badge text="zero-copy views" variant="success" />
+<Badge text="shared memory" variant="tip" />
+<Badge text="JS fallback" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/wasm-physics-binding"
+  variant="minimal"
+  icon="github"
+>
+  Browse package source
+</LinkButton>
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Canonical linear memory" icon="document">
+    One `WebAssembly.Memory` owned by the binding — optionally `SharedArrayBuffer`-backed.
+  </Card>
+  <Card title="In-place simulation" icon="rocket">
+    Modules importing `env.memory` integrate directly where the renderer reads.
+  </Card>
+  <Card title="Graceful fallback" icon="puzzle">
+    Semi-implicit Euler over identical memory when the module can't load — same API either way.
+  </Card>
+  <Card title="Backend transparency" icon="setting">
+    `usingWasm` / `fallback` always report which engine drives `step()`.
+  </Card>
+</CardGrid>
+
+## Installation
+
+<Installation package="wasm-physics-binding" />
+
+## Usage
+
+<Steps>
+
+1. Construct the binding and instantiate the module (or fall back):
+
+   ```typescript
+   import { WasmPhysicsBinding } from '@engineweb/wasm-physics-binding'
+
+   const physics = new WasmPhysicsBinding({
+     moduleUrl: '/physics/engine.wasm',
+     sharedMemory: true, // requires crossOriginIsolated
+     maxBodies: 512,
+   })
+
+   await physics.init()
+   ```
+
+2. Spawn bodies — each index maps to a 4×4 matrix in shared memory:
+
+   ```typescript
+   const crate = physics.addBody([0, 10, 0], [1, 0, 0])
+   ```
+
+3. Step and upload the live view every frame (translation lives at `[12, 13, 14]`):
+
+   ```typescript
+   setInterval(() => {
+     physics.step(1 / 60)
+     const { matrices, bodyCount } = physics.getTransformView()
+     threeMesh.setMatrixAt(crate, tmpMatrix.fromArray(matrices, crate * 16))
+   }, 1000 / 60)
+   ```
+
+</Steps>
+
+## WASM module contract
+
+For full zero-copy simulation, compile the engine so that it:
+
+1. **Imports** `env.memory` (a `WebAssembly.Memory`) and keeps body transforms there as packed column-major 4×4 matrices.
+2. Optionally exports **one** of `step(dt)`, `update(dt)`, `integrate(dt)` — called by `step()`.
+3. Optionally exports `body_count(): number` — adopted as the body count after `init()`.
+
+If the module doesn't import `env.memory`, `usingWasm` stays `false` and the JS fallback integrates local bodies instead. Responses without the `\0asm` magic (e.g. HTML error pages served with HTTP 200) are rejected into the fallback the same way. The reason is always available via `fallback`.
+
+## API reference
+
+### `new WasmPhysicsBinding(options)`
+
+| Option         | Default  | Description                                                                 |
+| -------------- | -------- | --------------------------------------------------------------------------- |
+| `moduleUrl`    | —        | URL of the `.wasm` binary. Required.                                        |
+| `sharedMemory` | `false`  | Back memory with `SharedArrayBuffer`. Throws in `init()` where unavailable. |
+| `maxBodies`    | `1024`   | Body budget; sizes the memory up front. Positive integer.                   |
+| `gravity`      | `-9.81`  | Y-axis gravity for the JS fallback integrator. Mutable via `physics.gravity`. |
+
+### Methods
+
+| Method                         | Description                                                                                                 |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `init()`                       | Allocates memory (identity matrices), fetches/compiles/instantiates. Records failures in `fallback`.        |
+| `addBody(position, velocity?)`  | Spawns a body, returns its index. `[x, y, z]` tuples or `{ x, y, z }`. Throws when full. Requires `init()`. |
+| `step(deltaSeconds)`           | Advances simulation; WASM export when shared, JS Euler otherwise. Non-positive dt throws `RangeError`.      |
+| `getTransformView()`           | Live zero-copy view. Only the first `bodyCount * 16` floats are valid. Throws before `init()`.              |
+| `get usingWasm()`              | Whether a memory-sharing WASM module drives `step()`.                                                       |
+| `get fallback()`               | Human-readable reason for JS mode, or `null` when WASM drives.                                              |
+| `get bodyCount()`              | Active body count.                                                                                          |
+
+Memory is re-attached automatically if the buffer ever detaches (e.g. after growth) — re-call `getTransformView()` per frame.

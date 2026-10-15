@@ -1,0 +1,119 @@
+---
+title: '@engineweb/skeletal-gpu'
+description: GPU-accelerated skeletal animation & skinning via WebGPU/WebGL2.
+---
+
+import { Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../components/Installation.astro'
+
+GPU-oriented skeletal animation: skeletons and animation tables are packed CPU-side into flat buffers ready to upload as Texture Data or Storage Buffers, while sampling, blend trees and hierarchy composition run in allocation-free math over `Float32Array`s.
+
+Hundreds of skinned characters animate without spiking the main thread — the renderer only uploads the resulting matrices.
+
+<Badge text="WebGPU / WebGL2" variant="tip" />
+<Badge text="blend trees" variant="success" />
+<Badge text="allocation-free update" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/skeletal-gpu"
+  variant="minimal"
+  icon="github"
+>
+  Browse package source
+</LinkButton>
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Validated skeletons" icon="approve-check">
+    Parent-before-child ordering is enforced, so composition needs no topological sort.
+  </Card>
+  <Card title="Packed keyframes" icon="list-format">
+    `7` floats per bone per frame — quaternion plus translation, frames back-to-back.
+  </Card>
+  <Card title="Per-instance blending" icon="random">
+    Any number of tracks weighted in `[0, 1]` with slerp sampling and hemisphere-safe rotation blending.
+  </Card>
+  <Card title="Pooled instances" icon="rocket">
+    Fixed `maxInstances` pool with `createInstance` / `destroyInstance` recycling.
+  </Card>
+</CardGrid>
+
+## Installation
+
+<Installation package="skeletal-gpu" />
+
+## Usage
+
+<Steps>
+
+1. Register a skeleton — bones ordered so every parent is `-1` or an earlier bone:
+
+   ```typescript
+   import { SkeletalGpu } from '@engineweb/skeletal-gpu'
+
+   const anim = new SkeletalGpu({ backend: 'webgpu', maxInstances: 256 })
+
+   const skeleton = anim.registerSkeleton(
+     [
+       { name: 'hips', parent: -1 },
+       { name: 'spine', parent: 0 },
+       { name: 'head', parent: 1 },
+     ],
+     [
+       { name: 'idle', durationSeconds: 2, keyframes: idleFrames }, // frames * bones * 7
+       { name: 'run', durationSeconds: 1, keyframes: runFrames },
+     ],
+   )
+   ```
+
+2. Allocate an instance and dial in the blend tree:
+
+   ```typescript
+   const orc = anim.createInstance(skeleton)
+   anim.setBlend(orc, 'idle', 0.7)
+   anim.setBlend(orc, 'run', 0.3)
+   ```
+
+3. Advance time and upload the live world matrices every frame:
+
+   ```typescript
+   function frame(dt: number): void {
+     anim.update(dt)
+     const matrices = anim.getInstanceMatrices(orc) // bones * 16 column-major floats
+     device.queue.writeBuffer(instanceBuffer, 0, matrices) // → storage buffer / bone texture
+   }
+   ```
+
+</Steps>
+
+Keyframe layout per frame, per bone (in bone order):
+
+```
+[qx, qy, qz, qw, tx, ty, tz]  // 7 floats, frames laid back-to-back
+```
+
+## API reference
+
+### `new SkeletalGpu(options)`
+
+| Option         | Description                                                     |
+| -------------- | --------------------------------------------------------------- |
+| `backend`      | `'webgpu'` \| `'webgl2'`. Anything else throws `TypeError`.     |
+| `maxInstances` | Instance pool size. Must be a positive integer.                 |
+
+### Methods
+
+| Method                                | Description                                                                                                                  |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `registerSkeleton(bones, tracks)`     | Validates and deep-copies; returns the skeleton id. Keyframes must hold whole `bones × 7` frames.                            |
+| `createInstance(skeletonId)`          | Allocates a pooled slot with identity matrices. Throws when exhausted.                                                       |
+| `destroyInstance(instanceId)`         | Releases the slot for reuse.                                                                                                 |
+| `setBlend(instanceId, track, weight)` | Blend-tree weight in `[0, 1]`; `0` removes the entry. Unknown tracks throw.                                                  |
+| `update(deltaSeconds)`                | Advances every active instance; weights normalize (zero total falls back to the first track). `0` is a no-op.               |
+| `getInstanceMatrices(instanceId)`     | Live `bones × 16` column-major buffer. Upload it, don't hold-and-mutate it.                                                  |
+
+## Performance notes
+
+- Per-frame math uses module-level scratch buffers — matrix composition itself is allocation-free.
+- Bone order is enforced at registration precisely so `update()` needs no topological sort.

@@ -1,0 +1,6 @@
+packages:
+  - packages/*
+  - docs
+  - game-example
+allowBuilds:
+  esbuild: true

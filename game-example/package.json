@@ -1,0 +1,25 @@
+{
+  "name": "game-example",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Playable 2D arena demo integrating the @engineweb packages (Vite + TypeScript).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@engineweb/async-pathfinder": "workspace:*",
+    "@engineweb/audio-synthesis": "workspace:*",
+    "@engineweb/effect-asset-pipeline": "workspace:*",
+    "@engineweb/net-interpolator": "workspace:*",
+    "@engineweb/signal-ecs": "workspace:*",
+    "@engineweb/typed-spatial-hash": "workspace:*",
+    "@engineweb/wasm-physics-binding": "workspace:*",
+    "@engineweb/worker-terrain": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^7.3.7"
+  }
+}

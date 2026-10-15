@@ -1,0 +1,11 @@
+dist
+build
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+package-lock.json
+node_modules
+.trash
+_trash
+*.mdx
+*.md

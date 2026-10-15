@@ -1,0 +1,114 @@
+---
+title: '@engineweb/async-pathfinder'
+description: Pathfinding A* / Theta* fragmentado (por cesión).
+---
+
+import { Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../../components/Installation.astro'
+
+Pathfinding A\* sobre mallas que **fragmenta las búsquedas pesadas en varios frames** con generadores asíncronos, así el recálculo de rutas de NPCs nunca bloquea la entrada ni el renderizado.
+
+<Badge text="fragmentado por frames" variant="success" />
+<Badge text="Theta* en cualquier ángulo" variant="tip" />
+<Badge text="60 FPS seguros" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/async-pathfinder"
+  variant="minimal"
+  icon="github"
+>
+  Ver código del paquete
+</LinkButton>
+
+## Características
+
+<CardGrid stagger>
+  <Card title="A* ponderado" icon="star">
+    Búsqueda clásica con heurística octil ajustable sobre tu malla `passable(x, y)`.
+  </Card>
+  <Card title="Suavizado Theta*" icon="random">
+    Salto de padres por línea de visión durante la búsqueda, más estirado de cuerda al final.
+  </Card>
+  <Card title="Fraccionado por frames" icon="rocket">
+    Cede el conteo de expansiones cada fragmento con una pausa real para el event loop.
+  </Card>
+  <Card title="Suavizado de esquinas" icon="puzzle">
+    Paso opcional de Chaikin que convierte escaleras de malla en curvas suaves.
+  </Card>
+</CardGrid>
+
+## Instalación
+
+<Installation package="async-pathfinder" />
+
+## Uso
+
+<Steps>
+
+1. Define qué se puede pisar — el único conocimiento del mundo que necesita la búsqueda:
+
+   ```typescript
+   import { findPath } from '@engineweb/async-pathfinder'
+
+   const passable = (x: number, y: number): boolean =>
+     x >= 0 && y >= 0 && x < width && y < height && !walls.has(`${x},${y}`)
+   ```
+
+2. Inicia la búsqueda y avánzala una vez por frame para que el juego nunca se atasque:
+
+   ```typescript
+   async function routeNpc(): Promise<void> {
+     const search = findPath(
+       { start, goal, width, height, passable },
+       { thetaStar: true, smoothPath: true },
+     )
+     for (;;) {
+       const step = await search.next()
+       if (step.done) {
+         npc.waypoints = step.value // Array<Vec2>, [] when unreachable
+         break
+       }
+       await nextFrame()
+     }
+   }
+   ```
+
+3. Opcionalmente muestra el progreso con `for await` (ten en cuenta que descarta el valor de retorno):
+
+   ```typescript
+   for await (const expanded of search) {
+     updateLoadingBar(expanded)
+     await nextFrame()
+   }
+   ```
+
+</Steps>
+
+## Referencia de la API
+
+### `findPath(request, options?)`
+
+Devuelve `AsyncGenerator<number, Array<Vec2>>`: cede el conteo acumulado de expansiones tras cada fragmento y retorna la lista de waypoints (`[]` si la meta es inalcanzable).
+
+**`PathRequest`**
+
+| Campo            | Descripción                                                                                               |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `start` / `goal` | Coordenadas enteras de celda `{ x, y }`. Deben estar en rango y ser transitables, si no `RangeError`.     |
+| `width` / `height` | Dimensiones positivas enteras de la malla.                                                             |
+| `passable(x, y)` | Indica si una celda es transitable. Solo se llama con celdas en rango (más la validación de inicio/meta). |
+
+**`PathfinderOptions`**
+
+| Opción                | Defecto | Descripción                                                              |
+| --------------------- | ------- | ------------------------------------------------------------------------ |
+| `maxExpansionsPerSlice` | `512` | Expansiones de nodos por fragmento. Menor = frames más fluidos.          |
+| `heuristicWeight`     | `1`     | `1` es A\* clásico; `> 1` es más voraz/rápido pero menos óptimo.         |
+| `thetaStar`           | `false` | Rutas en cualquier ángulo por salto de línea de visión + estirado.       |
+| `smoothPath`          | `false` | Un paso Chaikin de recorte de esquinas sobre los waypoints finales.      |
+
+## Notas de rendimiento
+
+- Todo el estado vive en buffers `Float32Array`/`Int32Array` prealojados de `width × height`; el heap binario soporta decrease-key vía índice de posición.
+- Los diagonales cuestan `√2` y nunca cortan esquinas (ambos vecinos ortogonales deben ser transitables).
+- La línea de visión de Theta\* usa recorrido Bresenham sobre tu función `passable` — mantenla barata.

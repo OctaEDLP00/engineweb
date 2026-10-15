@@ -1,0 +1,162 @@
+---
+title: '@engineweb/worker-terrain'
+description: Generación procedural de terreno en Web Workers (LOD y biomas).
+---
+
+import { Aside, Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../../components/Installation.astro'
+
+Generación infinita de terreno (vóxel o mapas de altura 2D) ejecutándose **100% dentro de Web Workers** mediante transferencia de memoria (objetos `Transferable`, listo para `SharedArrayBuffer`).
+
+La matemática pesada de ruido y la construcción de geometría nunca tocan el hilo principal, así el bucle de renderizado mantiene 60 FPS estrictos sin tirones ni stuttering.
+
+<Badge text="Web Workers" variant="tip" />
+<Badge text="transferencia zero-copy" variant="success" />
+<Badge text="determinista" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/worker-terrain"
+  variant="minimal"
+  icon="github"
+>
+  Ver código del paquete
+</LinkButton>
+
+## Características
+
+<CardGrid stagger>
+  <Card title="Generación fuera del hilo principal" icon="rocket">
+    Cualquier `TerrainGenerator` corre en un worker dedicado; los chunks vuelven como buffers transferidos.
+  </Card>
+  <Card title="Campos de ruido con semilla" icon="random">
+    `createPerlin2D`/`createPerlin3D` más movimiento fractal `fbm`/`fbm3D` — misma semilla, misma montaña, siempre.
+  </Card>
+  <Card title="Mezcla de biomas" icon="star">
+    `blendBiomes` combina elevación, humedad y temperatura en un solo multiplicador de altura.
+  </Card>
+  <Card title="Mallas con LOD" icon="list-format">
+    `createHeightmapChunk` reduce la densidad de la malla a la mitad por nivel de LOD, con un mínimo de un quad.
+  </Card>
+</CardGrid>
+
+## Instalación
+
+<Installation package="worker-terrain" />
+
+## Generar un chunk en el hilo principal
+
+```typescript
+import { createHeightmapChunk } from '@engineweb/worker-terrain'
+
+const chunk = createHeightmapChunk({ size: 128, lod: 0, seed: 1337 })
+// chunk.positions: Float32Array (x, y, z per vertex)
+// chunk.indices:   Uint32Array (two triangles per quad)
+// chunk.lod:       0
+```
+
+## Generar chunks dentro de un Web Worker
+
+<Steps>
+
+1. Crea un worker alrededor de cualquier función generadora pura:
+
+   ```typescript
+   import {
+     createHeightmapChunk,
+     createTerrainWorker,
+     type TerrainWorkerHandle,
+   } from '@engineweb/worker-terrain'
+
+   const worker = createTerrainWorker(createHeightmapChunk) as TerrainWorkerHandle
+   ```
+
+2. Pide chunks con el helper tipado (el protocolo crudo es `{ id, options }` ⇄ buffers transferibles):
+
+   ```typescript
+   const chunk = await worker.requestChunk({ size: 128, lod: 2, seed: 1337 })
+   ```
+
+3. Apaga el worker al descargar el nivel — las peticiones pendientes se rechazan limpiamente:
+
+   ```typescript
+   worker.terminate()
+   ```
+
+</Steps>
+
+<Aside type="caution">
+  El generador se serializa dentro del worker al crearlo, así que no debe capturar
+  variables de su ámbito exterior.
+</Aside>
+
+## Campos de ruido personalizados
+
+```typescript
+import { blendBiomes, createPerlin2D, fbm } from '@engineweb/worker-terrain'
+
+const elevation = createPerlin2D(42)
+const height = elevation(12.5, 7.25) // ≈ [-1, 1]
+const mountains = fbm(elevation, 12.5, 7.25, 5) // 5-octave fractal
+const mask = blendBiomes({ elevation: mountains, moisture: 0.7, temperature: 0.4 })
+```
+
+El campo 3D comparte la tabla de permutación del 2D, así una sola semilla mueve mapas de altura y densidad de vóxel a la vez:
+
+```typescript
+import { createPerlin3D, fbm3D } from '@engineweb/worker-terrain'
+
+// 3D density field: positive = solid, negative = air
+const density = createPerlin3D(7)
+const solid = fbm3D(density, 12.5, 7.25, 3.0, 4) > 0
+```
+
+## Referencia de la API
+
+### `createTerrainWorker(generate)`
+
+Crea un worker dedicado que ejecuta `generate` fuera del hilo principal. Lanza `TypeError` si el generador no es una función y `Error` donde no haya Web Workers. El worker devuelto además expone:
+
+- `requestChunk(options)` — envía `{ size, lod, seed }` y resuelve con vistas `Float32Array`/`Uint32Array` transferidas. Rechaza con el mensaje de error del worker si falla; todas las peticiones pendientes se rechazan ante un `error` del worker o `terminate()`.
+
+### Runtime `worker` estático
+
+El runtime anterior se distribuye como un archivo real — `@engineweb/worker-terrain/worker` (`dist/worker.js`) — en vez de un template string, así pasa por typecheck, lint y bundle como cualquier otro módulo. `createTerrainWorker` lo carga vía `new URL('./worker.js', import.meta.url)` (un patrón que Vite empaqueta de forma nativa) y lo inicializa con `{ type: 'init', source }`. Para hosts personalizados, maneja el protocolo directamente:
+
+```typescript
+import TerrainWorker from '@engineweb/worker-terrain/worker?worker' // Vite worker entry
+
+const worker = new TerrainWorker()
+worker.postMessage({ type: 'init', source: createHeightmapChunk.toString() })
+worker.postMessage({ id: 1, options: { size: 64, lod: 0, seed: 1 } })
+```
+
+### `createHeightmapChunk(options)`
+
+Generador CPU incluido. `size` es la longitud del lado en unidades de mundo, `lod` divide a la mitad la malla base de 64 segmentos por nivel (con un mínimo de un quad), `seed` alimenta todos los campos de ruido. Las alturas combinan elevación con biomas (`±24` unidades) y detalle fino (`±1.5`).
+
+### Primitivas de ruido
+
+| Exportación | Descripción |
+| ----------- | ----------- |
+| `createSeededRandom(seed)` | PRNG mulberry32 determinista. |
+| `createPerlin2D(seed)` | Campo Perlin mejorado con semilla, salida `≈ [-√2, √2]`. |
+| `createPerlin3D(seed)` | Campo Perlin 3D con semilla que comparte la tabla de permutación del 2D, salida `≈ [-1, 1]`. Ideal para densidad de vóxel. |
+| `fbm(noise, x, y, octaves?, lacunarity?, gain?)` | Movimiento Browniano fraccional, normalizado por suma de amplitudes. |
+| `fbm3D(noise, x, y, z, octaves?, lacunarity?, gain?)` | fBm sobre un campo 3D. Nombre separado porque un 4.º número chocaría con `octaves` del 2D. |
+| `blendBiomes({ elevation, moisture, temperature })` | Multiplicador de altura: la humedad eleva montañas, la temperatura suaviza picos. |
+
+### Tipos
+
+```typescript
+interface TerrainChunkOptions {
+  size: number
+  lod: number
+  seed: number
+}
+interface TerrainChunk {
+  positions: Float32Array
+  indices: Uint32Array
+  lod: number
+}
+type TerrainGenerator = (options: TerrainChunkOptions) => TerrainChunk
+```

@@ -1,0 +1,106 @@
+---
+title: '@engineweb/net-interpolator'
+description: Multiplayer snapshot sync with Effect Schema & Streams.
+---
+
+import { Badge, Card, CardGrid, LinkButton, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components'
+import Installation from '../../../components/Installation.astro'
+
+Multiplayer snapshot synchronization: a sorted jitter buffer with linear interpolation and velocity extrapolation for real-time play over WebSockets or WebRTC.
+
+The core is dependency-free and composes naturally with [Effect](https://effect.website/) — feed it snapshots from an Effect `Stream`/`PubSub` jitter buffer and validate packets with `@effect/schema` before pushing them in.
+
+<Badge text="jitter buffer" variant="tip" />
+<Badge text="interpolation + extrapolation" variant="success" />
+<Badge text="Effect-ready" variant="note" />
+
+<LinkButton href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/net-interpolator" variant="minimal" icon="github">
+  Browse package source
+</LinkButton>
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Sorted jitter buffer" icon="list-format">
+    Out-of-order insertion, duplicate-timestamp replacement and oldest-eviction past `bufferSize`.
+  </Card>
+  <Card title="Linear interpolation" icon="star">
+    Numbers, numeric arrays and plain objects with numeric fields; other fields track the newer snapshot.
+  </Card>
+  <Card title="Velocity extrapolation" icon="rocket">
+    Per-field dead reckoning past the newest snapshot; oldest-hold before the buffer.
+  </Card>
+  <Card title="Render-delay model" icon="setting">
+    Samples are taken at `now - delayMs` — one knob trades smoothness against latency.
+  </Card>
+</CardGrid>
+
+## Installation
+
+<Installation package="net-interpolator" />
+
+```bash
+pnpm add effect # optional — for Stream/PubSub pipelines and schema validation
+```
+
+## Usage
+
+<Tabs>
+  <TabItem label="Vanilla socket">
+
+```typescript
+import { NetInterpolator } from '@engineweb/net-interpolator'
+
+interface PlayerState {
+  x: number
+  y: number
+  hp: number
+}
+
+const interp = new NetInterpolator<PlayerState>({ delayMs: 100, bufferSize: 32 })
+
+// On every validated network packet:
+socket.onmessage = (packet) => interp.push({ state: packet, timestamp: packet.serverTime })
+
+// In the render loop:
+function frame(now: number): void {
+  const state = interp.sample(now) // interpolated (or extrapolated) snapshot
+  renderer.drawPlayer(state.x, state.y)
+}
+```
+
+  </TabItem>
+  <TabItem label="Effect stream">
+
+```typescript
+import { Effect, Stream } from 'effect'
+import { NetInterpolator } from '@engineweb/net-interpolator'
+
+const interp = new NetInterpolator<PlayerState>({ delayMs: 100 })
+
+const program = Stream.runForEach(networkStream, (snapshot) =>
+  Effect.sync(() => interp.push(snapshot)),
+)
+Effect.runPromise(program)
+```
+
+  </TabItem>
+</Tabs>
+
+## API reference
+
+### `new NetInterpolator<T>(options)`
+
+| Option       | Default | Description                                                     |
+| ------------ | ------- | --------------------------------------------------------------- |
+| `delayMs`    | —       | Render delay in ms subtracted from local time. Must be `>= 0`.  |
+| `bufferSize` | `32`    | Max snapshots retained; oldest evicted first. Positive integer. |
+
+### Methods
+
+| Method          | Description                                                                                                       |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `push(snapshot)`| Inserts `{ state, timestamp }`, keeping timestamp order. Throws `RangeError` on negative timestamps.             |
+| `sample(now)`   | Interpolated state at `now - delayMs`. Extrapolates past the newest snapshot, holds the oldest. Returns a copy. |
+| `get size()`    | Snapshots currently buffered.                                                                                     |
+| `clear()`       | Drops the whole buffer.                                                                                           |

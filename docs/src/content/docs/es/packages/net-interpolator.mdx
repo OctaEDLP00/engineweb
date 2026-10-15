@@ -1,0 +1,110 @@
+---
+title: '@engineweb/net-interpolator'
+description: Sincronización multijugador de snapshots con Effect Schema y Streams.
+---
+
+import { Badge, Card, CardGrid, LinkButton, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components'
+import Installation from '../../../../components/Installation.astro'
+
+Sincronización multijugador de snapshots: un jitter buffer ordenado con interpolación lineal y extrapolación por velocidad para juego en tiempo real sobre WebSockets o WebRTC.
+
+El núcleo no tiene dependencias y compone de forma natural con [Effect](https://effect.website/) — aliméntalo con snapshots de un jitter buffer en `Stream`/`PubSub` de Effect y valida los paquetes con `@effect/schema` antes de insertarlos.
+
+<Badge text="jitter buffer" variant="tip" />
+<Badge text="interpolación + extrapolación" variant="success" />
+<Badge text="listo para Effect" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/net-interpolator"
+  variant="minimal"
+  icon="github"
+>
+  Ver código del paquete
+</LinkButton>
+
+## Características
+
+<CardGrid stagger>
+  <Card title="Jitter buffer ordenado" icon="list-format">
+    Inserción desordenada, reemplazo por timestamp duplicado y expulsión del más antiguo tras `bufferSize`.
+  </Card>
+  <Card title="Interpolación lineal" icon="star">
+    Números, arrays numéricos y objetos con campos numéricos; el resto sigue al snapshot más nuevo.
+  </Card>
+  <Card title="Extrapolación por velocidad" icon="rocket">
+    Estimación por velocidad tras el snapshot más nuevo; conserva el más antiguo antes del buffer.
+  </Card>
+  <Card title="Modelo con retardo" icon="setting">
+    Las muestras se toman en `now - delayMs` — un solo ajuste entre fluidez y latencia.
+  </Card>
+</CardGrid>
+
+## Instalación
+
+<Installation package="net-interpolator" />
+
+```bash
+pnpm add effect # optional — for Stream/PubSub pipelines and schema validation
+```
+
+## Uso
+
+<Tabs>
+  <TabItem label="Socket simple">
+
+```typescript
+import { NetInterpolator } from '@engineweb/net-interpolator'
+
+interface PlayerState {
+  x: number
+  y: number
+  hp: number
+}
+
+const interp = new NetInterpolator<PlayerState>({ delayMs: 100, bufferSize: 32 })
+
+// On every validated network packet:
+socket.onmessage = (packet) => interp.push({ state: packet, timestamp: packet.serverTime })
+
+// In the render loop:
+function frame(now: number): void {
+  const state = interp.sample(now) // interpolated (or extrapolated) snapshot
+  renderer.drawPlayer(state.x, state.y)
+}
+```
+
+  </TabItem>
+  <TabItem label="Stream de Effect">
+
+```typescript
+import { Effect, Stream } from 'effect'
+import { NetInterpolator } from '@engineweb/net-interpolator'
+
+const interp = new NetInterpolator<PlayerState>({ delayMs: 100 })
+
+const program = Stream.runForEach(networkStream, (snapshot) =>
+  Effect.sync(() => interp.push(snapshot)),
+)
+Effect.runPromise(program)
+```
+
+  </TabItem>
+</Tabs>
+
+## Referencia de la API
+
+### `new NetInterpolator<T>(options)`
+
+| Opción       | Defecto | Descripción                                                                   |
+| ------------ | ------- | ----------------------------------------------------------------------------- |
+| `delayMs`    | —       | Retardo de renderizado en ms restado al tiempo local. Debe ser `>= 0`.        |
+| `bufferSize` | `32`    | Máximo de snapshots; se expulsa el más antiguo. Entero positivo.              |
+
+### Métodos
+
+| Método          | Descripción                                                                                                            |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `push(snapshot)`| Inserta `{ state, timestamp }` manteniendo el orden. Lanza `RangeError` con timestamps negativos.                     |
+| `sample(now)`   | Estado interpolado en `now - delayMs`. Extrapola tras el snapshot nuevo, conserva el antiguo. Devuelve una copia.     |
+| `get size()`    | Snapshots actualmente en buffer.                                                                                       |
+| `clear()`       | Vacía todo el buffer.                                                                                                  |

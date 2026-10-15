@@ -1,0 +1,146 @@
+---
+title: '@engineweb/effect-asset-pipeline'
+description: Resilient asset loader and cache manager powered by Effect.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkButton, LinkCard, Steps, Tabs, TabItem, Code } from '@astrojs/starlight/components'
+import Installation from '../../../components/Installation.astro'
+
+A resilient asset loader and GPU-memory cache (textures, 3D models, audio, sprite sheets) with concurrency limits, exponential-backoff retries and LRU purging.
+
+The design mirrors [Effect](https://effect.website/) resource patterns — bounded concurrency like a semaphore, retry schedules with backoff, and abortable scopes via `AbortSignal` — and drops cleanly into Effect `Stream`/`Effect` download pipelines.
+
+<Badge text="bounded concurrency" variant="tip" />
+<Badge text="backoff retries" variant="success" />
+<Badge text="LRU cache" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/effect-asset-pipeline"
+  variant="minimal"
+  icon="github"
+>
+  Browse package source
+</LinkButton>
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Bounded downloads" icon="setting">
+    A semaphore-limited queue, so 200 assets never open 200 sockets at once.
+  </Card>
+  <Card title="Resilient retries" icon="rocket">
+    Exponential backoff with jitter, capped at 5 s — HTTP errors and network failures both retry.
+  </Card>
+  <Card title="LRU byte budget" icon="list-format">
+    Repeat loads resolve from memory; `purge()` evicts least-recently-used entries back under budget.
+  </Card>
+  <Card title="Abort everywhere" icon="star">
+    One `AbortSignal` cancels queue waits, in-flight fetches and retry sleeps.
+  </Card>
+</CardGrid>
+
+## Installation
+
+<Installation package="effect-asset-pipeline" />
+
+> Optional Installaion **to orchestrate loads inside Effect pipelines**
+
+<Tabs syncKey="install">
+  <TabItem label="pnpm">
+    <Code lang="bash" code="pnpm add effect"/>
+  </TabItem>
+  <TabItem label="npm">
+    <Code lang="bash" code="npm install effect"/>
+  </TabItem>
+  <TabItem label="yarn">
+    <Code lang="bash" code="yarn add effect"/>
+  </TabItem>
+  <TabItem label="bun">
+    <Code lang="bash" code="bun add effect"/>
+  </TabItem>
+</Tabs>
+
+## Usage
+
+<Steps>
+
+1. Create the pipeline with your concurrency, retry and memory budgets:
+
+   ```typescript
+   import { AssetPipeline } from '@engineweb/effect-asset-pipeline'
+
+   const assets = new AssetPipeline({
+     concurrency: 6,
+     maxRetries: 3,
+     cacheBudgetBytes: 256 * 1024 * 1024,
+   })
+   ```
+
+2. Load a level behind a global timeout — duplicate URLs share one fetch:
+
+   ```typescript
+   const controller = new AbortController()
+   setTimeout(() => controller.abort(), 30_000)
+
+   const [diffuse, level, theme] = await Promise.all([
+     assets.load({ url: '/texture/arena.ktx2', kind: 'texture', signal: controller.signal }),
+     assets.load({ url: '/models/arena.glb', kind: 'model', signal: controller.signal }),
+     assets.load({ url: '/audio/theme.ogg', kind: 'audio', signal: controller.signal }),
+   ])
+   ```
+
+3. Upload to the GPU, then purge back under budget on level transitions:
+
+   ```typescript
+   uploadToGpu(diffuse) // ArrayBuffer, cached — the next load() for this URL is free
+   assets.purge()
+   ```
+
+</Steps>
+
+Inside Effect:
+
+```typescript
+import { Effect } from 'effect'
+import { AssetPipeline } from '@engineweb/effect-asset-pipeline'
+
+const loadAsset = (url: string) =>
+  Effect.tryPromise({
+    try: () => assets.load({ url, kind: 'texture' }),
+    catch: (cause) => new AssetError({ url, cause }),
+  }).pipe(Effect.withSpan('asset.load'))
+```
+
+## API reference
+
+### `new AssetPipeline(options?)`
+
+| Option             | Default   | Description                                             |
+| ------------------ | --------- | ------------------------------------------------------- |
+| `concurrency`      | `6`       | Max simultaneous fetches. Positive integer.             |
+| `maxRetries`       | `3`       | Retries after the first attempt. Non-negative integer.  |
+| `cacheBudgetBytes` | `256 MiB` | Soft byte budget. Non-negative.                         |
+
+All options validate with `RangeError` on bad values.
+
+### Methods
+
+| Method                                             | Description                                                                                                      |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `load(request)`                                    | Fetches (or cache-hits) one asset. Duplicate concurrent loads share one fetch. Throws `TypeError` without a URL. |
+| `purge()`                                          | Evicts least-recently-used entries until within budget.                                                          |
+| `clear()`                                          | Empties the cache unconditionally.                                                                               |
+| `get cachedByteCount()` / `get cachedEntryCount()` | Cache telemetry.                                                                                                 |
+
+**`AssetRequest`**
+
+| Field       | Description                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `url`       | `string` or `URL`. Cache key is `String(url)`.                                                                |
+| `kind`      | `'texture'` \| `'model'` \| `'audio'` \| `'sprite-sheet'` \| `'binary'`. Informational; reserved for budgets. |
+| `priority?` | Reserved for priority scheduling (higher first). Accepted, currently advisory.                                |
+| `signal?`   | `AbortSignal` cancelling queue wait, fetch and retry sleeps.                                                  |
+
+<Aside type="caution">
+  Cached buffers are shared, not copied — treat them as read-only after `load()` resolves.
+</Aside>

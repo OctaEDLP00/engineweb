@@ -1,0 +1,141 @@
+---
+title: '@engineweb/signal-ecs'
+description: Arquitectura ECS reactiva con Signals y SoA.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../../components/Installation.astro'
+
+Un Entity Component System ultraligero impulsado por **señales sobre datos en Estructura de Arrays (SoA)**.
+
+Los stores de componentes viven en `TypedArrays`; las escrituras se detectan por cambio, así los suscriptores y renderizadores solo reaccionan a componentes cuyos valores mutaron de verdad — ideal para bucles híbridos DOM + WebGL sin re-renderizados completos.
+
+<Badge text="señales sobre SoA" variant="tip" />
+<Badge text="notifica solo al mutar" variant="success" />
+<Badge text="ids reciclados" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/signal-ecs"
+  variant="minimal"
+  icon="github"
+>
+  Ver código del paquete
+</LinkButton>
+
+## Características
+
+<CardGrid stagger>
+  <Card title="Ids de entidad reciclados" icon="rocket">
+    Pool fijo de `capacity` — sin crecimiento de ids, sin churn de GC, `destroyEntity` los devuelve.
+  </Card>
+  <Card title="Escrituras con detección" icon="star">
+    `registerComponent` instrumenta `write`: la comparación de floats antes/después decide si los listeners disparan.
+  </Card>
+  <Card title="Banderas dirty" icon="puzzle">
+    Banderas `isDirty`/`clearDirty` por entidad para renderizadores pull que drenan cambios por frame.
+  </Card>
+  <Card title="Desuscripción incluida" icon="setting">
+    Cada `watch` devuelve una función de limpieza — sin suscripciones fugadas.
+  </Card>
+</CardGrid>
+
+## Instalación
+
+<Installation package="signal-ecs" />
+
+## Uso
+
+<Steps>
+
+1. Define un componente sobre tu propio store SoA:
+
+   ```typescript
+   import { World, type ComponentType, type Entity } from '@engineweb/signal-ecs'
+
+   const CAPACITY = 1024
+   const store = new Float32Array(CAPACITY * 2) // [x0, y0, x1, y1, ...]
+
+   interface XY {
+     x: number
+     y: number
+   }
+
+   const Position: ComponentType<XY> = {
+     name: 'position',
+     arity: 2,
+     read(entity: Entity, out: Float32Array): XY {
+       out[0] = store[entity * 2]
+       out[1] = store[entity * 2 + 1]
+       return { x: out[0], y: out[1] }
+     },
+     write(entity: Entity, value: XY): void {
+       store[entity * 2] = value.x
+       store[entity * 2 + 1] = value.y
+     },
+   }
+   ```
+
+2. Registra el store y suscríbete — el callback solo dispara con mutaciones reales:
+
+   ```typescript
+   const world = new World(CAPACITY)
+   world.registerComponent(Position)
+
+   const player = world.createEntity()
+   world.watch(Position, (entity, value) => {
+     document.getElementById(`dot-${entity}`)?.setAttribute('cx', String(value.x))
+   })
+
+   Position.write(player, { x: 10, y: 20 }) // fires
+   Position.write(player, { x: 10, y: 20 }) // silent — floats are identical
+   ```
+
+3. O drena las banderas dirty estilo pull en el render loop, y recicla:
+
+   ```typescript
+   if (world.isDirty(Position, player)) {
+     syncCanvas(player)
+     world.clearDirty(Position, player)
+   }
+
+   world.destroyEntity(player) // id recycled by the next createEntity()
+   ```
+
+</Steps>
+
+## Referencia de la API
+
+### `new World(capacity)`
+
+Presupuesto entero positivo de entidades. Si no, `RangeError`.
+
+### `ComponentType<T>`
+
+```typescript
+interface ComponentType<T> {
+  readonly name: string // unique per world
+  readonly arity: number // scalars per entity; positive integer
+  read(entity: Entity, out: Float32Array): T // fill `out` (length >= arity) from your SoA store
+  write(entity: Entity, value: T): void // persist `value` into your SoA store
+}
+```
+
+<Aside type="caution">
+  `registerComponent` reemplaza `write` con un envoltorio instrumentado (detección de cambios +
+  notificación). No reasignes `write` después, ni pases objetos de componente congelados.
+</Aside>
+
+### Métodos
+
+| Método                    | Descripción                                                              |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `createEntity()`          | Siguiente id reciclado. Lanza error si la capacidad se agota.            |
+| `destroyEntity(entity)`   | Mata la entidad, limpia sus banderas dirty, recicla el id.               |
+| `hasEntity(entity)`       | Comprueba si está viva.                                                  |
+| `get entityCount()`       | Número de entidades vivas.                                               |
+| `registerComponent(type)` | Registra un store; lanza error con duplicados o descriptores malformados. |
+| `watch(type, cb)`         | Se suscribe a mutaciones reales; devuelve función para desuscribirse.    |
+| `isDirty(type, entity)`   | Bandera de mutación pendiente para renderizadores pull.                  |
+| `clearDirty(type, entity)`| Confirma la bandera.                                                     |
+
+La comparación usa `Object.is` por escalar, así las escrituras `NaN` se tratan como no-ops y `-0` frente a `+0` como cambios.

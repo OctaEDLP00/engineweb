@@ -1,0 +1,38 @@
+# Build output
+build/
+dist/
+
+# generated types
+.astro/
+
+# macOS-specific files
+.DS_Store
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# dotenv environment variables file
+.env
+.env.test
+.env.local
+.env.production
+.env.*
+
+.trash
+_trash
+__trash
+__trash__
+
+# Locks (pnpm-lock.yaml is tracked: CI installs with --frozen-lockfile)
+package-lock.json
+bun.lock
+yarn.lock

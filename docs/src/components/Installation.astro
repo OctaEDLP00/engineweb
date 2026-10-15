@@ -1,0 +1,33 @@
+---
+import { Tabs, TabItem, Code } from '@astrojs/starlight/components'
+interface Props {
+  package: string
+}
+---
+
+<Tabs syncKey='install'>
+  <TabItem label='pnpm'>
+    <Code
+      lang='bash'
+      code={`pnpm add @engineweb/${Astro.props.package}`}
+    />
+  </TabItem>
+  <TabItem label='npm'>
+    <Code
+      lang='bash'
+      code={`npm install @engineweb/${Astro.props.package}`}
+    />
+  </TabItem>
+  <TabItem label='yarn'>
+    <Code
+      lang='bash'
+      code={`yarn add @engineweb/${Astro.props.package}`}
+    />
+  </TabItem>
+  <TabItem label='bun'>
+    <Code
+      lang='bash'
+      code={`bun add @engineweb/${Astro.props.package}`}
+    />
+  </TabItem>
+</Tabs>

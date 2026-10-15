@@ -1,0 +1,41 @@
+{
+  "name": "@engineweb/net-interpolator",
+  "version": "0.0.1",
+  "description": "Multiplayer snapshot interpolation, extrapolation and lag compensation powered by Effect",
+  "keywords": [
+    "multiplayer",
+    "networking",
+    "interpolation",
+    "snapshot",
+    "effect",
+    "lag-compensation"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "README.md", "CHANGELOG.md", "LICENSE"],
+  "scripts": {
+    "build": "tsdown index.ts --format esm --dts --clean --no-fixed-extension",
+    "test": "vitest run --passWithNoTests",
+    "coverage": "vitest run --coverage --passWithNoTests"
+  },
+  "dependencies": {
+    "effect": "^3.14.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "directory": "packages/net-interpolator",
+    "type": "git",
+    "url": "https://github.com/OctaEDLP00/engineweb.git"
+  },
+  "bugs": "https://github.com/OctaEDLP00/engineweb/issues",
+  "homepage": "https://github.com/OctaEDLP00/engineweb#readme"
+}

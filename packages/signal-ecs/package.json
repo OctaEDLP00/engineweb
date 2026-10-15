@@ -1,0 +1,31 @@
+{
+  "name": "@engineweb/signal-ecs",
+  "version": "0.0.1",
+  "description": "Reactive ECS architecture backed by Signals and Structure-of-Arrays (SoA) over TypedArrays",
+  "keywords": ["ecs", "entity-component-system", "signals", "soa", "reactive", "typed-array"],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "README.md", "CHANGELOG.md", "LICENSE"],
+  "scripts": {
+    "build": "tsdown index.ts --format esm --dts --clean --no-fixed-extension",
+    "test": "vitest run --passWithNoTests",
+    "coverage": "vitest run --coverage --passWithNoTests"
+  },
+  "license": "MIT",
+  "repository": {
+    "directory": "packages/signal-ecs",
+    "type": "git",
+    "url": "https://github.com/OctaEDLP00/engineweb.git"
+  },
+  "bugs": "https://github.com/OctaEDLP00/engineweb/issues",
+  "homepage": "https://github.com/OctaEDLP00/engineweb#readme"
+}

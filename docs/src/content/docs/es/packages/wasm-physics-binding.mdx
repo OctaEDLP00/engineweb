@@ -1,0 +1,115 @@
+---
+title: '@engineweb/wasm-physics-binding'
+description: Capa de interop de física WebAssembly zero-copy.
+---
+
+import { Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../../components/Installation.astro'
+
+Interop zero-copy para motores de física compilados a WebAssembly (Rapier, Box2D, …): una única `WebAssembly.Memory` canónica guarda cada matriz de cuerpo, compartida directamente con el módulo WASM y legible desde WebGL/Three.js sin serialización.
+
+Cuando no hay un módulo compatible al alcance, un integrador JS incluido mantiene el mismo contrato de memoria, así los juegos arrancan y se prueban en cualquier sitio.
+
+<Badge text="vistas zero-copy" variant="success" />
+<Badge text="memoria compartida" variant="tip" />
+<Badge text="fallback JS" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/wasm-physics-binding"
+  variant="minimal"
+  icon="github"
+>
+  Ver código del paquete
+</LinkButton>
+
+## Características
+
+<CardGrid stagger>
+  <Card title="Memoria lineal canónica" icon="document">
+    Una `WebAssembly.Memory` propiedad del binding — opcionalmente sobre `SharedArrayBuffer`.
+  </Card>
+  <Card title="Simulación in-place" icon="rocket">
+    Los módulos que importan `env.memory` integran justo donde lee el renderizador.
+  </Card>
+  <Card title="Fallback elegante" icon="puzzle">
+    Euler semi-implícito sobre la misma memoria si el módulo no carga — misma API en ambos casos.
+  </Card>
+  <Card title="Backend transparente" icon="setting">
+    `usingWasm` / `fallback` siempre informan qué motor mueve `step()`.
+  </Card>
+</CardGrid>
+
+## Instalación
+
+<Installation package="wasm-physics-binding" />
+
+## Uso
+
+<Steps>
+
+1. Construye el binding e instancia el módulo (o cae al fallback):
+
+   ```typescript
+   import { WasmPhysicsBinding } from '@engineweb/wasm-physics-binding'
+
+   const physics = new WasmPhysicsBinding({
+     moduleUrl: '/physics/engine.wasm',
+     sharedMemory: true, // requires crossOriginIsolated
+     maxBodies: 512,
+   })
+
+   await physics.init()
+   ```
+
+2. Crea cuerpos — cada índice mapea a una matriz 4×4 en memoria compartida:
+
+   ```typescript
+   const crate = physics.addBody([0, 10, 0], [1, 0, 0])
+   ```
+
+3. Avanza y sube la vista viva cada frame (la traslación vive en `[12, 13, 14]`):
+
+   ```typescript
+   setInterval(() => {
+     physics.step(1 / 60)
+     const { matrices, bodyCount } = physics.getTransformView()
+     threeMesh.setMatrixAt(crate, tmpMatrix.fromArray(matrices, crate * 16))
+   }, 1000 / 60)
+   ```
+
+</Steps>
+
+## Contrato del módulo WASM
+
+Para simulación zero-copy total, compila el motor para que:
+
+1. **Importe** `env.memory` (una `WebAssembly.Memory`) y guarde ahí las transformadas como matrices 4×4 columna-mayor empaquetadas.
+2. Exporte opcionalmente **una** de `step(dt)`, `update(dt)`, `integrate(dt)` — la llama `step()`.
+3. Exporte opcionalmente `body_count(): number` — se adopta como conteo tras `init()`.
+
+Si el módulo no importa `env.memory`, `usingWasm` queda en `false` y el fallback JS integra los cuerpos locales. Las respuestas sin la magia `\0asm` (p. ej. páginas HTML de error servidas con HTTP 200) caen al fallback de la misma forma. La razón siempre está en `fallback`.
+
+## Referencia de la API
+
+### `new WasmPhysicsBinding(options)`
+
+| Opción         | Defecto  | Descripción                                                                          |
+| -------------- | -------- | ------------------------------------------------------------------------------------ |
+| `moduleUrl`    | —        | URL del binario `.wasm`. Requerida.                                                  |
+| `sharedMemory` | `false`  | Memoria sobre `SharedArrayBuffer`. Lanza en `init()` donde no exista.                |
+| `maxBodies`    | `1024`   | Presupuesto de cuerpos; dimensiona la memoria. Entero positivo.                      |
+| `gravity`      | `-9.81`  | Gravedad en Y para el integrador JS. Mutable vía `physics.gravity`.                  |
+
+### Métodos
+
+| Método                        | Descripción                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `init()`                      | Aloja memoria (matrices identidad), descarga/compila/instancia. Guarda los fallos en `fallback`.              |
+| `addBody(position, velocity?)` | Crea un cuerpo, devuelve su índice. Tuplas `[x, y, z]` u objetos `{ x, y, z }`. Lanza si está lleno. Requiere `init()`. |
+| `step(deltaSeconds)`          | Avanza la simulación; export WASM si hay memoria compartida, Euler JS si no. dt no positivo lanza `RangeError`. |
+| `getTransformView()`          | Vista viva zero-copy. Solo los primeros `bodyCount * 16` floats son válidos. Lanza antes de `init()`.         |
+| `get usingWasm()`             | Indica si un módulo WASM con memoria compartida mueve `step()`.                                               |
+| `get fallback()`              | Razón legible del modo JS, o `null` si WASM manda.                                                            |
+| `get bodyCount()`             | Número de cuerpos activos.                                                                                    |
+
+La memoria se re-ancla sola si el buffer se despega (p. ej. tras crecer) — llama a `getTransformView()` por frame.

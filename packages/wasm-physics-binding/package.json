@@ -1,0 +1,31 @@
+{
+  "name": "@engineweb/wasm-physics-binding",
+  "version": "0.0.1",
+  "description": "Zero-copy WebAssembly physics interop layer (Rapier / Box2D) sharing memory with WebGL renderers",
+  "keywords": ["wasm", "webassembly", "physics", "rapier", "box2d", "zero-copy", "shared-memory"],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "README.md", "CHANGELOG.md", "LICENSE"],
+  "scripts": {
+    "build": "tsdown index.ts --format esm --dts --clean --no-fixed-extension",
+    "test": "vitest run --passWithNoTests",
+    "coverage": "vitest run --coverage --passWithNoTests"
+  },
+  "license": "MIT",
+  "repository": {
+    "directory": "packages/wasm-physics-binding",
+    "type": "git",
+    "url": "https://github.com/OctaEDLP00/engineweb.git"
+  },
+  "bugs": "https://github.com/OctaEDLP00/engineweb/issues",
+  "homepage": "https://github.com/OctaEDLP00/engineweb#readme"
+}

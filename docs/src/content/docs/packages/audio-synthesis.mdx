@@ -1,0 +1,138 @@
+---
+title: '@engineweb/audio-synthesis'
+description: Procedural sound design and adaptive music using WebAudio & AudioWorklet.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkButton, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components'
+import Installation from '../../../components/Installation.astro'
+
+Procedural sound effects and adaptive music with the Web Audio API and `AudioWorklet` — FM synthesis voices, white/pink/brown noise, and ADSR envelopes, all synthesized on the fly.
+
+No MP3/WAV downloads, minimal bundle impact: footsteps, laser shots and explosions become a few lines of code.
+
+<Badge text="Web Audio + AudioWorklet" variant="tip" />
+<Badge text="FM + ADSR" variant="success" />
+<Badge text="zero audio assets" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/audio-synthesis"
+  variant="minimal"
+  icon="github"
+>
+  Browse package source
+</LinkButton>
+
+## Features
+
+<CardGrid stagger>
+  <Card title="FM voices" icon="star">
+    One-shot carrier + modulator oscillators with ratio/index control and auto-teardown.
+  </Card>
+  <Card title="Full ADSR" icon="setting">
+    Attack → decay → sustain hold → release scheduling on every voice.
+  </Card>
+  <Card title="Three noise colors" icon="random">
+    White, pink (Paul Kellet filter) and brown (leaky integrator) — buffered and streaming.
+  </Card>
+  <Card title="Worklet with fallback" icon="puzzle">
+    Lazy `AudioWorklet` registration; buffer noise keeps working where worklets can't.
+  </Card>
+</CardGrid>
+
+## Installation
+
+<Installation package="audio-synthesis" />
+
+## Usage
+
+```typescript
+import { SynthEngine } from '@engineweb/audio-synthesis'
+
+const engine = new SynthEngine(new AudioContext())
+await engine.init() // master gain + worklet registration (idempotent)
+```
+
+<Tabs>
+  <TabItem label="Laser shot">
+
+```typescript
+// Bright FM blip with a snappy envelope
+engine.playVoice({
+  frequency: 880,
+  ratio: 2,
+  index: 6,
+  envelope: { attackSeconds: 0.005, decaySeconds: 0.08, sustainLevel: 0.4, releaseSeconds: 0.15 },
+})
+```
+
+  </TabItem>
+  <TabItem label="Explosion bed">
+
+```typescript
+// Looping brown noise through a lowpass
+const rumble = engine.createNoise('brown')
+const filter = engine.context.createBiquadFilter()
+filter.type = 'lowpass'
+filter.frequency.value = 220
+rumble.connect(filter).connect(engine.context.destination)
+rumble.start()
+```
+
+  </TabItem>
+  <TabItem label="Footsteps">
+
+```typescript
+// Streaming worklet noise node (buffer fallback included)
+const steps = engine.createNoiseNode('white')
+```
+
+  </TabItem>
+</Tabs>
+
+An adaptive-music loop can schedule `playVoice` on a lookahead timer, varying `ratio`/`index` per bar for evolving timbres without any audio assets.
+
+## API reference
+
+### `new SynthEngine(context)`
+
+Accepts any object exposing the `AudioContext` creation surface (`createOscillator`, `createGain`, `createBuffer`). Throws `TypeError` otherwise — and never a bare `ReferenceError` outside browsers.
+
+### Methods
+
+| Method                  | Description                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `init()`                | Creates the master gain (`0.8`) and registers the `engineweb-noise` worklet. Safe to call twice.                         |
+| `get isInitialized()`   | Whether `init()` completed.                                                                                              |
+| `get masterVolume()`    | Current master level in `[0, 1]`.                                                                                        |
+| `setMasterVolume(value)`| Sets the master level (`0` = silent); stored when called before `init()`. Throws `RangeError` outside `[0, 1]`.         |
+| `playVoice(options)`    | Schedules a one-shot FM voice, returns immediately. Nodes auto-stop and disconnect after the envelope.                   |
+| `createNoise(kind)`     | 2 s looping buffer source. `'white'` \| `'pink'` \| `'brown'`; anything else throws `TypeError`. Caller connects/starts. |
+| `createNoiseNode(kind)` | Streaming `AudioWorkletNode` (connected to master output), falling back to a connected buffer where unavailable.         |
+
+**`SynthVoiceOptions`**
+
+| Field       | Default | Description                                                                                                                     |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `frequency` | —       | Carrier Hz. Must be positive.                                                                                                   |
+| `ratio`     | `1`     | Modulator frequency ratio (e.g. `2` ≈ bell-like). Must be positive.                                                             |
+| `index`     | `5`     | FM depth as a multiple of the carrier (`0` = pure sine). Must be `>= 0`.                                                        |
+| `envelope`  | —       | `{ attackSeconds, decaySeconds, sustainLevel, releaseSeconds }`: times `>= 0`, sustain in `[0, 1]`. Holds sustain 0.4 s, then releases. |
+
+## Browser notes
+
+<Aside type="note">
+  `AudioContext` requires a user gesture in most browsers — construct/resume inside a click or
+  key handler.
+</Aside>
+
+`createNoiseNode` needs `init()` first so the worklet module is registered; otherwise it transparently returns the buffer fallback.
+
+### Static processor file
+
+The worklet above ships as a real file — `@engineweb/audio-synthesis/processor` (`dist/processor.js`) — instead of a template string, so it is typechecked, linted, tested and bundled like any other module. `init()` loads it via `new URL('./processor.js', import.meta.url)`; for custom hosts, load the file directly:
+
+```typescript
+import processorUrl from '@engineweb/audio-synthesis/processor?url' // Vite asset URL
+
+await context.audioWorklet.addModule(processorUrl)
+```

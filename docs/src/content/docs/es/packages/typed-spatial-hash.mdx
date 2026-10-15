@@ -1,0 +1,130 @@
+---
+title: '@engineweb/typed-spatial-hash'
+description: Particionamiento espacial zero-GC con TypedArrays.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkButton, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components'
+import Installation from '../../../../components/Installation.astro'
+
+Particionamiento espacial de alto rendimiento (hash espacial uniforme) construido exclusivamente sobre **TypedArrays** — sin objetos en el heap durante la ejecución, sin pausas del recolector de basura, incluso con más de 5.000 entidades simultáneas.
+
+Ideal para detección de colisiones de fase amplia, búsquedas por radio y consultas de k vecinos más cercanos en bucles de juego ajustados.
+
+<Badge text="cero alojamiento en ejecución" variant="success" />
+<Badge text="solo TypedArrays" variant="note" />
+<Badge text="más de 5.000 entidades" variant="tip" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/typed-spatial-hash"
+  variant="minimal"
+  icon="github"
+>
+  Ver código del paquete
+</LinkButton>
+
+## Características
+
+<CardGrid stagger>
+  <Card title="Almacenamiento SoA plano" icon="list-format">
+    Posiciones en `Float32Array`, banderas de vida en `Uint8Array`, tabla de buckets potencia de dos con listas enlazadas.
+  </Card>
+  <Card title="Consultas por radio" icon="star">
+    Recorre las celdas solapadas con un array de marcas, así las colisiones de hash nunca evalúan una entidad dos veces.
+  </Card>
+  <Card title="Consultas k-NN" icon="random">
+    Quickselect in-place más ordenación por inserción sobre buffers temporales — resultados ordenados de menor a mayor distancia.
+  </Card>
+  <Card title="Actualizaciones O(1)" icon="rocket">
+    Las entidades que cambian de celda se desenganchan y reenganchan según la cadena; `insert`, `remove` y `clear` no alojan nada.
+  </Card>
+</CardGrid>
+
+## Instalación
+
+<Installation package="typed-spatial-hash" />
+
+## Uso
+
+<Tabs>
+  <TabItem label="Colisión de fase amplia">
+
+```typescript
+import { TypedSpatialHash } from '@engineweb/typed-spatial-hash'
+
+const grid = new TypedSpatialHash({ cellSize: 16, capacity: 5000 })
+
+// Insert or move entities (ids are 0 .. capacity - 1)
+grid.insert(playerId, playerX, playerY)
+grid.insert(npcId, npcX, npcY)
+
+// Who is within 48 units of the player?
+const nearby = grid.queryRadius(playerX, playerY, 48)
+for (let i = 0; i < nearby.count; i++) {
+  collide(playerId, nearby.ids[i])
+}
+
+grid.remove(deadId)
+```
+
+  </TabItem>
+  <TabItem label="IA con k-NN">
+
+```typescript
+// 4 nearest neighbors, sorted ascending by distance
+const nearest = grid.queryKNearest(npcX, npcY, 4)
+for (let i = 0; i < nearest.count; i++) {
+  target(npcId, nearest.ids[i])
+}
+```
+
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="Buffers reutilizados">
+  Ambas consultas devuelven el mismo objeto interno `{ ids, count }` sobre un
+  `Uint32Array` prealojado. Copia los ids si debes conservarlos más allá de la siguiente consulta:
+
+```typescript
+const snapshot = nearby.ids.slice(0, nearby.count)
+```
+
+</Aside>
+
+## Referencia de la API
+
+### `new TypedSpatialHash(options)`
+
+| Opción     | Descripción                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `cellSize` | Lado de celda uniforme en unidades de mundo. Debe ser positivo. Elige más o menos el diámetro de una entidad. |
+| `capacity` | Número máximo de entidades. Entero positivo. Los ids deben cumplir `0 <= id < capacity`.                      |
+
+### Métodos
+
+| Método                      | Descripción                                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `insert(id, x, y)`          | Inserta o actualiza la posición de una entidad. No aloja nada. Lanza `RangeError` con ids/coordenadas mal. |
+| `remove(id)`                | Elimina una entidad; sin efecto si no existe. No aloja nada.                                              |
+| `clear()`                   | Elimina todas las entidades. No aloja nada.                                                               |
+| `has(id)`                   | Indica si el id está almacenado.                                                                          |
+| `get size()`                | Número de entidades almacenadas.                                                                          |
+| `queryRadius(x, y, radius)` | Todas las entidades con `dist² <= radius²`, sin orden. Lanza error con radio negativo.                    |
+| `queryKNearest(x, y, k)`    | Hasta `k` entidades más cercanas, ordenadas por distancia. Lanza error con `k` no positivo.               |
+
+```typescript
+interface SpatialHashOptions {
+  cellSize: number
+  capacity: number
+}
+// ids is reused — copy if you keep it
+interface QueryResult {
+  ids: Uint32Array
+  count: number
+}
+```
+
+## Notas de rendimiento
+
+- Todo el trabajo por frame es aritmética sobre arrays planos; el objeto resultado se crea una vez en el constructor.
+- Los buckets se mantienen cortos cuando `cellSize` acompaña la densidad de entidades.
+- En escenas casi estáticas, inserta una vez y consulta libremente — las consultas nunca mutan el índice.

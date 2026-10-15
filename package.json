@@ -1,0 +1,54 @@
+{
+  "author": "OctaEDLP00 <octavio.pincha@gmail.com> (https://github.com/OctaEDLP00)",
+  "bugs": {
+    "email": "octavio.pincha@gmail.com",
+    "url": "https://github.com/OctaEDLP00/engineweb/issues"
+  },
+  "description": "Ultra-high-performance algorithms, data structures, and utilities engineered for modern browser-based video games (TypeScript / ESM).",
+  "devDependencies": {
+    "@changesets/cli": "3.0.3",
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3",
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.6.5",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "tsdown": "0.23.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vitest": "5.0.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [ "webgame", "gamedev", "webgl", "webgpu", "wasm", "ecs", "pathfinding", "typescript" ],
+  "license": "MIT",
+  "name": "engineweb",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OctaEDLP00/engineweb"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter=\"./packages/*\" run build",
+    "changeset": "changeset",
+    "commitlint": "commitlint",
+    "coverage": "pnpm -r --filter=\"./packages/*\" run coverage",
+    "docs:build": "pnpm --filter docs run build",
+    "docs:dev": "pnpm --filter docs run dev",
+    "docs:preview": "pnpm --filter docs run preview",
+    "example:build": "pnpm --filter game-example run build",
+    "example:dev": "pnpm --filter game-example run dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "release": "changeset publish",
+    "test": "pnpm -r --filter=\"./packages/*\" run test",
+    "version-packages": "changeset version"
+  },
+  "type": "module",
+  "version": "0.0.1",
+  "packageManager": "pnpm@12.11.2"
+}

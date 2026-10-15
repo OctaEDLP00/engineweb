@@ -1,0 +1,35 @@
+---
+title: EngineWeb
+description: Algoritmos, estructuras de datos y utilidades de ultra alto rendimiento para videojuegos modernos basados en navegador.
+template: splash
+hero:
+  tagline: Algoritmos, estructuras de datos y utilidades de ultra alto rendimiento diseñados para videojuegos modernos basados en navegador. 60 FPS estrictos, gestión de memoria zero-GC y concurrencia robusta.
+  actions:
+    - text: Comenzar
+      link: /es/guides/getting-started/
+      icon: right-arrow
+    - text: Ver en GitHub
+      link: https://github.com/OctaEDLP00/engineweb
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components'
+
+<CardGrid stagger>
+  <Card title="Estructuras de datos zero-GC" icon="list-format">
+    Particionamiento espacial basado en TypedArrays que gestiona más de 5.000 entidades sin
+    pausas del recolector de basura.
+  </Card>
+  <Card title="Fuera del hilo principal" icon="setting">
+    Generación procedural de terreno y pathfinding dentro de Web Workers para
+    mantener 60 FPS estrictos.
+  </Card>
+  <Card title="Potenciado por Effect" icon="puzzle">
+    Redes con tipos seguros y pipelines de assets construidos sobre Effect Streams, PubSub
+    y validación con Schema.
+  </Card>
+  <Card title="GPU y WASM primero" icon="star">
+    Bindings de física WebAssembly zero-copy y animación esquelética en GPU
+    vía WebGPU/WebGL2.
+  </Card>
+</CardGrid>

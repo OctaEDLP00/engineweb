@@ -1,0 +1,53 @@
+name: Feature request
+description: Propose a new feature or public API for an EngineWeb package.
+title: 'feat: '
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which package should gain this feature?
+      options:
+        - '@engineweb/worker-terrain'
+        - '@engineweb/typed-spatial-hash'
+        - '@engineweb/async-pathfinder'
+        - '@engineweb/net-interpolator'
+        - '@engineweb/signal-ecs'
+        - '@engineweb/wasm-physics-binding'
+        - '@engineweb/effect-asset-pipeline'
+        - '@engineweb/skeletal-gpu'
+        - '@engineweb/audio-synthesis'
+        - docs
+        - game-example
+        - new package
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should be added, in one or two sentences?
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Which game or use case needs this? Why do current APIs fall short?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: Sketch the API you have in mind (signatures, options, example usage).
+      placeholder: |
+        ```ts
+        // proposed usage here
+        ```
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other designs, workarounds, or related libraries worth knowing about.

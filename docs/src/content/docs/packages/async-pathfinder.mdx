@@ -1,0 +1,114 @@
+---
+title: '@engineweb/async-pathfinder'
+description: Fragmented A* / Theta* pathfinding (Yielding).
+---
+
+import { Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../components/Installation.astro'
+
+Grid-based A\* pathfinding that **slices heavy searches across multiple frames** with async generators, so NPC route recalculation never blocks input or rendering.
+
+<Badge text="sliced across frames" variant="success" />
+<Badge text="Theta* any-angle" variant="tip" />
+<Badge text="60 FPS safe" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/async-pathfinder"
+  variant="minimal"
+  icon="github"
+>
+  Browse package source
+</LinkButton>
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Weighted A*" icon="star">
+    Classic octile-heuristic search with tunable greediness over your `passable(x, y)` grid.
+  </Card>
+  <Card title="Theta* smoothing" icon="random">
+    Line-of-sight parent skipping during search, plus greedy string-pulling after.
+  </Card>
+  <Card title="Frame slicing" icon="rocket">
+    Yields the expansion count every slice with a real macrotask pause for the event loop.
+  </Card>
+  <Card title="Corner softening" icon="puzzle">
+    Optional Chaikin pass turns grid staircases into smooth waypoint curves.
+  </Card>
+</CardGrid>
+
+## Installation
+
+<Installation package="async-pathfinder" />
+
+## Usage
+
+<Steps>
+
+1. Define what can be walked — the only world knowledge the search needs:
+
+   ```typescript
+   import { findPath } from '@engineweb/async-pathfinder'
+
+   const passable = (x: number, y: number): boolean =>
+     x >= 0 && y >= 0 && x < width && y < height && !walls.has(`${x},${y}`)
+   ```
+
+2. Start the search and advance it once per frame so the game never hitches:
+
+   ```typescript
+   async function routeNpc(): Promise<void> {
+     const search = findPath(
+       { start, goal, width, height, passable },
+       { thetaStar: true, smoothPath: true },
+     )
+     for (;;) {
+       const step = await search.next()
+       if (step.done) {
+         npc.waypoints = step.value // Array<Vec2>, [] when unreachable
+         break
+       }
+       await nextFrame()
+     }
+   }
+   ```
+
+3. Optionally surface progress with `for await` (note: it discards the return value):
+
+   ```typescript
+   for await (const expanded of search) {
+     updateLoadingBar(expanded)
+     await nextFrame()
+   }
+   ```
+
+</Steps>
+
+## API reference
+
+### `findPath(request, options?)`
+
+Returns `AsyncGenerator<number, Array<Vec2>>`: yields the running expansion count after each slice, returns the waypoint list (`[]` when the goal is unreachable).
+
+**`PathRequest`**
+
+| Field              | Description                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| `start` / `goal`   | Integer cell coordinates `{ x, y }`. Must be in bounds and passable, else `RangeError`.            |
+| `width` / `height` | Positive integer grid dimensions.                                                                  |
+| `passable(x, y)`   | Returns whether a cell can be entered. Called for in-bounds cells only (plus start/goal validation). |
+
+**`PathfinderOptions`**
+
+| Option                  | Default | Description                                                    |
+| ----------------------- | ------- | -------------------------------------------------------------- |
+| `maxExpansionsPerSlice` | `512`   | Node expansions per slice. Lower = smoother frames.            |
+| `heuristicWeight`       | `1`     | `1` is classic A\*; `> 1` is greedier/faster but less optimal. |
+| `thetaStar`             | `false` | Any-angle paths via line-of-sight skipping + string-pulling.   |
+| `smoothPath`            | `false` | One Chaikin corner-cutting pass over the final waypoints.      |
+
+## Performance notes
+
+- All search state lives in preallocated `Float64Array`/`Int32Array` buffers sized `width × height`; the binary heap supports decrease-key via a position index.
+- Diagonal moves cost `√2` and never cut corners (both orthogonal neighbors must be passable).
+- Theta\* line-of-sight uses Bresenham cell traversal over your `passable` function — keep that function cheap.

@@ -1,0 +1,44 @@
+{
+  "name": "@engineweb/worker-terrain",
+  "version": "0.0.1",
+  "description": "Procedural terrain generation in Web Workers (LOD & Biomes) with SharedArrayBuffer / Transferable objects",
+  "keywords": [
+    "terrain",
+    "procedural",
+    "noise",
+    "voxel",
+    "heightmap",
+    "web-worker",
+    "lod",
+    "biomes"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "README.md", "CHANGELOG.md", "LICENSE"],
+  "scripts": {
+    "build": "tsdown index.ts --format esm --dts --clean --no-fixed-extension && tsdown src/worker.ts --format esm --dts --out-dir dist --no-clean --no-fixed-extension",
+    "test": "vitest run --passWithNoTests",
+    "coverage": "vitest run --coverage --passWithNoTests"
+  },
+  "license": "MIT",
+  "repository": {
+    "directory": "packages/worker-terrain",
+    "type": "git",
+    "url": "https://github.com/OctaEDLP00/engineweb.git"
+  },
+  "bugs": "https://github.com/OctaEDLP00/engineweb/issues",
+  "homepage": "https://github.com/OctaEDLP00/engineweb#readme"
+}

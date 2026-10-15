@@ -1,0 +1,162 @@
+---
+title: '@engineweb/worker-terrain'
+description: Procedural terrain generation in Web Workers (LOD & Biomes).
+---
+
+import { Aside, Badge, Card, CardGrid, LinkButton, LinkCard, Steps } from '@astrojs/starlight/components'
+import Installation from '../../../components/Installation.astro'
+
+Infinite terrain generation (voxel or 2D heightmaps) running **100% inside Web Workers** via memory transfer (`Transferable` objects, `SharedArrayBuffer`-ready).
+
+Heavy noise math and geometry building never touch the main thread, so the render loop holds a strict 60 FPS with zero stuttering or jank.
+
+<Badge text="Web Workers" variant="tip" />
+<Badge text="zero-copy transfer" variant="success" />
+<Badge text="deterministic" variant="note" />
+
+<LinkButton
+  href="https://github.com/OctaEDLP00/engineweb/tree/main/packages/worker-terrain"
+  variant="minimal"
+  icon="github"
+>
+  Browse package source
+</LinkButton>
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Off-main-thread generation" icon="rocket">
+    Any `TerrainGenerator` runs in a dedicated worker; chunks stream back as transferred buffers.
+  </Card>
+  <Card title="Seeded noise fields" icon="random">
+    `createPerlin2D`/`createPerlin3D` plus `fbm`/`fbm3D` fractal motion — same seed, same mountain, every time.
+  </Card>
+  <Card title="Biome blending" icon="star">
+    `blendBiomes` folds elevation, moisture and temperature into one height multiplier.
+  </Card>
+  <Card title="LOD-aware meshing" icon="list-format">
+    `createHeightmapChunk` halves grid density per LOD level, clamped to at least one quad.
+  </Card>
+</CardGrid>
+
+## Installation
+
+<Installation package="worker-terrain" />
+
+## Generate a chunk on the main thread
+
+```typescript
+import { createHeightmapChunk } from '@engineweb/worker-terrain'
+
+const chunk = createHeightmapChunk({ size: 128, lod: 0, seed: 1337 })
+// chunk.positions: Float32Array (x, y, z per vertex)
+// chunk.indices:   Uint32Array (two triangles per quad)
+// chunk.lod:       0
+```
+
+## Generate chunks inside a Web Worker
+
+<Steps>
+
+1. Spawn a worker around any pure generator function:
+
+   ```typescript
+   import {
+     createHeightmapChunk,
+     createTerrainWorker,
+     type TerrainWorkerHandle,
+   } from '@engineweb/worker-terrain'
+
+   const worker = createTerrainWorker(createHeightmapChunk) as TerrainWorkerHandle
+   ```
+
+2. Request chunks with the typed helper (raw protocol is `{ id, options }` ⇄ transferable buffers):
+
+   ```typescript
+   const chunk = await worker.requestChunk({ size: 128, lod: 2, seed: 1337 })
+   ```
+
+3. Shut the worker down when the level unloads — pending requests reject cleanly:
+
+   ```typescript
+   worker.terminate()
+   ```
+
+</Steps>
+
+<Aside type="caution">
+  The generator is serialized into the worker at spawn time, so it must not close over
+  outer scope.
+</Aside>
+
+## Custom noise fields
+
+```typescript
+import { blendBiomes, createPerlin2D, fbm } from '@engineweb/worker-terrain'
+
+const elevation = createPerlin2D(42)
+const height = elevation(12.5, 7.25) // ≈ [-1, 1]
+const mountains = fbm(elevation, 12.5, 7.25, 5) // 5-octave fractal
+const mask = blendBiomes({ elevation: mountains, moisture: 0.7, temperature: 0.4 })
+```
+
+The 3D field shares the 2D permutation table, so one seed drives heightmaps and voxel density together:
+
+```typescript
+import { createPerlin3D, fbm3D } from '@engineweb/worker-terrain'
+
+// 3D density field: positive = solid, negative = air
+const density = createPerlin3D(7)
+const solid = fbm3D(density, 12.5, 7.25, 3.0, 4) > 0
+```
+
+## API reference
+
+### `createTerrainWorker(generate)`
+
+Spawns a dedicated worker running `generate` off the main thread. Throws a `TypeError` for non-function generators and an `Error` where Web Workers are unavailable. The returned worker additionally exposes:
+
+- `requestChunk(options)` — posts `{ size, lod, seed }`, resolves with transferred `Float32Array`/`Uint32Array` views. Rejects with the worker-side error message on failure; all pending requests reject on worker `error` or `terminate()`.
+
+### Static `worker` runtime
+
+The runtime above ships as a real file — `@engineweb/worker-terrain/worker` (`dist/worker.js`) — instead of a template string, so it is typechecked, linted and bundled like any other module. `createTerrainWorker` loads it via `new URL('./worker.js', import.meta.url)` (a pattern Vite bundles natively) and bootstraps it with `{ type: 'init', source }`. For custom hosts, drive the protocol directly:
+
+```typescript
+import TerrainWorker from '@engineweb/worker-terrain/worker?worker' // Vite worker entry
+
+const worker = new TerrainWorker()
+worker.postMessage({ type: 'init', source: createHeightmapChunk.toString() })
+worker.postMessage({ id: 1, options: { size: 64, lod: 0, seed: 1 } })
+```
+
+### `createHeightmapChunk(options)`
+
+Built-in CPU generator. `size` is the world-space edge length, `lod` halves the base 64-segment grid per level (clamped so at least one quad remains), `seed` drives all noise fields. Heights combine biome-blended elevation (`±24` units) with fine detail (`±1.5`).
+
+### Noise primitives
+
+| Export | Description |
+| ------ | ----------- |
+| `createSeededRandom(seed)` | Deterministic mulberry32 PRNG. |
+| `createPerlin2D(seed)` | Seeded improved-Perlin field, output `≈ [-√2, √2]`. |
+| `createPerlin3D(seed)` | Seeded 3D Perlin field sharing the 2D permutation table, output `≈ [-1, 1]`. Ideal for voxel density. |
+| `fbm(noise, x, y, octaves?, lacunarity?, gain?)` | Fractal Brownian motion, normalized by amplitude sum. |
+| `fbm3D(noise, x, y, z, octaves?, lacunarity?, gain?)` | fBm over a 3D field. Separate name because a 4th number would clash with 2D `octaves`. |
+| `blendBiomes({ elevation, moisture, temperature })` | Height multiplier: moisture raises mountain mass, temperature softens peaks. |
+
+### Types
+
+```typescript
+interface TerrainChunkOptions {
+  size: number
+  lod: number
+  seed: number
+}
+interface TerrainChunk {
+  positions: Float32Array
+  indices: Uint32Array
+  lod: number
+}
+type TerrainGenerator = (options: TerrainChunkOptions) => TerrainChunk
+```
