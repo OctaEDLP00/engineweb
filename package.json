@@ -23,7 +23,7 @@
   "engines": {
     "node": ">=20"
   },
-  "keywords": [ "webgame", "gamedev", "webgl", "webgpu", "wasm", "ecs", "pathfinding", "typescript" ],
+  "keywords": ["webgame", "gamedev", "webgl", "webgpu", "wasm", "ecs", "pathfinding", "typescript"],
   "license": "MIT",
   "name": "engineweb",
   "private": true,

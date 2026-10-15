@@ -45,13 +45,13 @@ function boot(source: unknown): void {
 }
 
 scope.onmessage = (event: MessageEvent): void => {
-  const message = event.data as TerrainWorkerInit | { id: unknown, options: unknown } | null
+  const message = event.data as TerrainWorkerInit | { id: unknown; options: unknown } | null
   if (!message || typeof message !== 'object') return
   if ((message as TerrainWorkerInit).type === 'init') {
     boot((message as TerrainWorkerInit).source)
     return
   }
-  const { id, options } = message as { id: unknown, options: unknown }
+  const { id, options } = message as { id: unknown; options: unknown }
   if (typeof id !== 'number' || !options || typeof options !== 'object') return
   try {
     if (initError) throw initError
@@ -65,7 +65,9 @@ scope.onmessage = (event: MessageEvent): void => {
       !(chunk.positions instanceof Float32Array) ||
       !(chunk.indices instanceof Uint32Array)
     ) {
-      throw new TypeError('generator must return { positions: Float32Array, indices: Uint32Array, lod }')
+      throw new TypeError(
+        'generator must return { positions: Float32Array, indices: Uint32Array, lod }',
+      )
     }
     // Only transferable ArrayBuffers can cross the boundary — a
     // SharedArrayBuffer view would throw DataCloneError on post.

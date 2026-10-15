@@ -39,7 +39,7 @@ function installFakeWorker(): () => void {
   }
 }
 
-function host(): { worker: TerrainWorkerHandle, fake: FakeWorker } {
+function host(): { worker: TerrainWorkerHandle; fake: FakeWorker } {
   const worker = createTerrainWorker(createHeightmapChunk) as unknown as TerrainWorkerHandle
   const fake = FakeWorker.last
   if (!fake) throw new Error('test setup: fake worker was not constructed')
@@ -88,7 +88,7 @@ describe('createTerrainWorker protocol', () => {
     try {
       const { worker, fake } = host()
       const pending = worker.requestChunk({ size: 8, lod: 0, seed: 1 })
-      const sent = fake.posted[1] as { id: number, options: TerrainChunkOptions }
+      const sent = fake.posted[1] as { id: number; options: TerrainChunkOptions }
       expect(typeof sent.id).toBe('number')
       expect(sent.options).toEqual({ size: 8, lod: 0, seed: 1 })
       const positions = new Float32Array([10, 20, 30])
