@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/net-interpolator",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Multiplayer snapshot interpolation, extrapolation and lag compensation powered by Effect",
   "keywords": [
     "multiplayer",

@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/signal-ecs",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Reactive ECS architecture backed by Signals and Structure-of-Arrays (SoA) over TypedArrays",
   "keywords": ["ecs", "entity-component-system", "signals", "soa", "reactive", "typed-array"],
   "type": "module",

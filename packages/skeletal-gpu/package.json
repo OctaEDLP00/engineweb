@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/skeletal-gpu",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "GPU-accelerated skeletal animation & skinning via WebGPU/WebGL2 compute and storage buffers",
   "keywords": ["skeletal-animation", "skinning", "webgpu", "webgl2", "blend-shapes", "quaternion"],
   "type": "module",

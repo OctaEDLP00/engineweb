@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/async-pathfinder",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Fragmented A* / Theta* pathfinding that yields across frames with generators",
   "keywords": ["pathfinding", "a-star", "theta-star", "navmesh", "bezier", "async"],
   "type": "module",
