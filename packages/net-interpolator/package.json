@@ -28,7 +28,7 @@
     "coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
-    "effect": "^3.14.0"
+    "effect": "^4.0.3"
   },
   "license": "MIT",
   "repository": {
