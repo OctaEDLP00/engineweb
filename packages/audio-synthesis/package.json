@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/audio-synthesis",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Procedural sound design and adaptive music using WebAudio & AudioWorklet (FM synthesis, noise, ADSR)",
   "keywords": ["audio", "synthesis", "webaudio", "audioworklet", "procedural", "fm", "adsr"],
   "type": "module",

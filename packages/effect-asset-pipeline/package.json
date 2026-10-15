@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/effect-asset-pipeline",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Resilient asset loader and GPU cache manager powered by Effect (Streams, retries, LRU)",
   "keywords": ["assets", "loader", "effect", "streams", "retry", "lru", "cache"],
   "type": "module",

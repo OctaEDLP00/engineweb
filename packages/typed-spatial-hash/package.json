@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/typed-spatial-hash",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Zero-GC spatial partitioning (Spatial Hash / Quadtree) built exclusively on TypedArrays",
   "keywords": ["spatial-hash", "quadtree", "collision", "broad-phase", "typed-array", "zero-gc"],
   "type": "module",

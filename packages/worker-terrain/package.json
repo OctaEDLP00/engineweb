@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/worker-terrain",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Procedural terrain generation in Web Workers (LOD & Biomes) with SharedArrayBuffer / Transferable objects",
   "keywords": [
     "terrain",

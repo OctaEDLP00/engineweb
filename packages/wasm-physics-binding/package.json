@@ -1,6 +1,6 @@
 {
   "name": "@engineweb/wasm-physics-binding",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Zero-copy WebAssembly physics interop layer (Rapier / Box2D) sharing memory with WebGL renderers",
   "keywords": ["wasm", "webassembly", "physics", "rapier", "box2d", "zero-copy", "shared-memory"],
   "type": "module",
